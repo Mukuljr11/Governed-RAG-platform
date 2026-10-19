@@ -7,7 +7,15 @@ authors = [
     { name = "Mukul Sharma", email = "156288725+Mukuljr11@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "cryptography>=50.0.2",
+    "fastapi>=0.147.0",
+    "pydantic-settings>=2.16.0",
+    "pymysql>=1.2.3",
+    "qdrant-client>=1.19.1",
+    "sqlalchemy>=2.1.5",
+    "uvicorn[standard]>=0.54.0",
+]
 
 [project.scripts]
 governed-rag-platform = "governed_rag_platform:main"
