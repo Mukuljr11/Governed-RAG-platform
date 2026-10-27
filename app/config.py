@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     postgres_user: str = "rag"
     postgres_password: str = "ragpass"
     postgres_db: str = "ragdb"
+    ollama_url: str = "http://localhost:11434"
+    embedding_model: str = "bge-m3"
+    embedding_dim: int = 1024
+    upload_dir: str = "./data/uploads"
 
     @property
     def database_url(self) -> str:

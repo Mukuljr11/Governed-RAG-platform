@@ -9,6 +9,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Stage 2: small runtime image
 FROM python:3.12-slim
 RUN useradd --create-home appuser
+RUN mkdir -p /data/uploads && chown -R appuser:appuser /data
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY app ./app

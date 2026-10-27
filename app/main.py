@@ -1,10 +1,14 @@
-from fastapi import Depends, FastAPI
+from pathlib import Path
+
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import engine, get_db
-from app.models import Document, IngestionJob, User
+from app.ingestion import run_ingestion
+from app.models import Chunk, Document, IngestionJob, User
 
 app = FastAPI(title="Governed RAG Platform")
 
@@ -56,3 +60,52 @@ def create_document(body: DocumentIn, db: Session = Depends(get_db)):
 def list_documents(db: Session = Depends(get_db)):
     docs = db.scalars(select(Document)).all()
     return [{"id": d.id, "owner_id": d.owner_id, "filename": d.filename} for d in docs]    
+
+ALLOWED_TYPES = {"application/pdf", "text/plain"}
+
+
+@app.post("/documents/upload")
+def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    owner_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(415, "Only PDF and TXT files are supported")
+    if db.get(User, owner_id) is None:
+        raise HTTPException(404, "Owner not found")
+
+    doc = Document(
+        owner_id=owner_id,
+        filename=file.filename or "upload",
+        content_type=file.content_type,
+    )
+    db.add(doc)
+    db.flush()
+
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    path = upload_dir / f"{doc.id}{Path(doc.filename).suffix.lower()}"
+    path.write_bytes(file.file.read())
+    doc.storage_path = str(path)
+
+    job = IngestionJob(document_id=doc.id)
+    db.add(job)
+    db.commit()
+
+    background_tasks.add_task(run_ingestion, job.id)
+    return {"document_id": doc.id, "job_id": job.id, "status": "pending"}
+
+
+@app.get("/documents/{doc_id}/status")
+def document_status(doc_id: int, db: Session = Depends(get_db)):
+    job = db.scalars(
+        select(IngestionJob)
+        .where(IngestionJob.document_id == doc_id)
+        .order_by(IngestionJob.id.desc())
+    ).first()
+    if job is None:
+        raise HTTPException(404, "Document not found")
+    chunks = db.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == doc_id))
+    return {"status": job.status, "error": job.error, "chunks": chunks}    
