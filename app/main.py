@@ -9,6 +9,7 @@ from app.config import settings
 from app.db import engine, get_db
 from app.ingestion import run_ingestion
 from app.models import Chunk, Document, IngestionJob, User
+from app.retrieval import hybrid_search
 
 app = FastAPI(title="Governed RAG Platform")
 
@@ -109,3 +110,12 @@ def document_status(doc_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Document not found")
     chunks = db.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == doc_id))
     return {"status": job.status, "error": job.error, "chunks": chunks}    
+
+class SearchIn(BaseModel):
+    query: str
+    top_k: int = 5
+
+
+@app.post("/search")
+def search(body: SearchIn, db: Session = Depends(get_db)):
+    return {"query": body.query, "results": hybrid_search(db, body.query, body.top_k)}
