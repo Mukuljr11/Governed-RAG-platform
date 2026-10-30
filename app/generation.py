@@ -61,7 +61,7 @@ def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
                     "document_id": c["document_id"],
                     "filename": c["filename"],
                     "page_number": c["page_number"],
-                    "snippet": c["content"][:200],
+                    "snippet": c["content"],
                 }
             )
     return sources

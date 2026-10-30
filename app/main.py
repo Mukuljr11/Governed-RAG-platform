@@ -11,6 +11,7 @@ from app.ingestion import run_ingestion
 from app.models import Chunk, Document, IngestionJob, User
 from app.retrieval import hybrid_search
 from app.generation import NOT_FOUND, extract_citations, generate_answer
+from app.agent import run_agent
 
 app = FastAPI(title="Governed RAG Platform")
 
@@ -148,4 +149,8 @@ def ask(body: AskIn, db: Session = Depends(get_db)):
         "answer": answer,
         "sources": sources,
         "grounded": bool(sources) or answer.strip() == NOT_FOUND,
-    }    
+    }  
+
+@app.post("/ask/agent")
+def ask_agent(body: AskIn, db: Session = Depends(get_db)):
+    return run_agent(db, body.question)      
