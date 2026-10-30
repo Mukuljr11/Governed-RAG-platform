@@ -10,10 +10,14 @@ SYSTEM_PROMPT = f"""You are a careful assistant that answers questions using ONL
 
 Rules:
 - Use only facts stated in the context. Do not use outside knowledge.
-- After every sentence that uses a passage, add its number in square brackets, like [1] or [2][3].
+- Always reply with a complete sentence that answers the question, then put the passage number in square brackets, like [1] or [2][3]. Never reply with only a passage number.
+- For yes or no questions, begin with Yes or No.
 - If the context does not contain the answer, reply exactly: {NOT_FOUND}
-- Keep the answer short and direct."""
+- Keep the answer short and direct.
 
+Example:
+Question: Is parking reimbursed?
+Answer: Yes, parking is reimbursed up to 10 dollars per day. [2]"""
 
 def build_context(chunks: list[dict]) -> str:
     blocks = []
@@ -65,3 +69,7 @@ def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
                 }
             )
     return sources
+
+def has_content(answer: str) -> bool:
+    text = re.sub(r"\[[\d,\s]+\]", "", answer).strip()
+    return len(text) >= 10    

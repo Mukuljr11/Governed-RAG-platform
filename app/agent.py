@@ -7,7 +7,7 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.generation import NOT_FOUND, build_context, extract_citations, generate_answer
+from app.generation import NOT_FOUND, build_context, extract_citations, generate_answer, has_content
 from app.retrieval import hybrid_search
 
 MAX_REWRITES = 1
@@ -15,6 +15,7 @@ TOP_K = 4
 
 REWRITE_SYSTEM = """You rewrite a user question into a short search query for a document search engine.
 Use wording likely to appear in formal company documents such as policies and reports.
+Keep the same meaning as the question. Use plain words separated by spaces, with no underscores or quotes.
 Output only the query on a single line, with no explanation."""
 
 
@@ -76,7 +77,7 @@ def generate(state: AgentState) -> dict:
     answer = generate_answer(state["question"], state["chunks"])
     sources = extract_citations(answer, state["chunks"])
     refused = NOT_FOUND in answer
-    grounded = bool(sources) or refused
+    grounded = (bool(sources) and has_content(answer)) or refused
     outcome = "refused" if refused else f"{len(sources)} sources cited"
     return {
         "answer": answer,
