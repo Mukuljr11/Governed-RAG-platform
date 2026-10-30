@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     embedding_model: str = "bge-m3"
     embedding_dim: int = 1024
     upload_dir: str = "./data/uploads"
+    llm_model: str = "qwen2.5:3b-instruct"
+    min_similarity: float = 0.6
 
     @property
     def database_url(self) -> str:
