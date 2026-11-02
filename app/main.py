@@ -12,6 +12,7 @@ from app.models import Chunk, Document, IngestionJob, User
 from app.retrieval import hybrid_search
 from app.generation import NOT_FOUND, extract_citations, generate_answer, has_content
 from app.agent import run_agent
+from app.request_agent import decide, get_request, start_request
 
 app = FastAPI(title="Governed RAG Platform")
 
@@ -154,3 +155,35 @@ def ask(body: AskIn, db: Session = Depends(get_db)):
 @app.post("/ask/agent")
 def ask_agent(body: AskIn, db: Session = Depends(get_db)):
     return run_agent(db, body.question)      
+
+class RequestIn(BaseModel):
+    requester_id: int
+    request_text: str
+
+
+class DecisionIn(BaseModel):
+    approved: bool
+    note: str = ""
+
+
+@app.post("/requests")
+def create_request(body: RequestIn, db: Session = Depends(get_db)):
+    if db.get(User, body.requester_id) is None:
+        raise HTTPException(404, "Requester not found")
+    return start_request(body.requester_id, body.request_text)
+
+
+@app.get("/requests/{thread_id}")
+def read_request(thread_id: str):
+    try:
+        return get_request(thread_id)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.post("/requests/{thread_id}/decision")
+def decide_request(thread_id: str, body: DecisionIn):
+    try:
+        return decide(thread_id, body.approved, body.note)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))    

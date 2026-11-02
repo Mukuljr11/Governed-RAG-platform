@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     upload_dir: str = "./data/uploads"
     llm_model: str = "qwen2.5:3b-instruct"
     min_similarity: float = 0.6
+    mcp_url: str = "http://localhost:8001/mcp"
+
+    @property
+    def psycopg_url(self) -> str:
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
 
     @property
     def database_url(self) -> str:

@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       OLLAMA_URL: http://ollama:11434
       UPLOAD_DIR: /data/uploads
+      MCP_URL: http://mcp:8001/mcp
     volumes:
       - uploads_data:/data/uploads
     depends_on:
@@ -17,6 +18,8 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      mcp:
+        condition: service_started
     restart: unless-stopped
 
   postgres:
@@ -49,6 +52,24 @@ services:
       timeout: 10s
       retries: 10
       start_period: 20s
+    restart: unless-stopped
+
+  mcp:
+    build: .
+    command: ["python", "-m", "app.mcp_server"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      OLLAMA_URL: http://ollama:11434
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
