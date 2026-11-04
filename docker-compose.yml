@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: dockerfile.local 
     ports:
       - "8000:8000"
     environment:
@@ -11,6 +13,7 @@ services:
       OLLAMA_URL: http://ollama:11434
       UPLOAD_DIR: /data/uploads
       MCP_URL: http://mcp:8001/mcp
+      JWT_SECRET: ${JWT_SECRET}
     volumes:
       - uploads_data:/data/uploads
     depends_on:
@@ -55,7 +58,9 @@ services:
     restart: unless-stopped
 
   mcp:
-    build: .
+    build:
+      context: .
+      dockerfile: dockerfile.local
     command: ["python", "-m", "app.mcp_server"]
     environment:
       POSTGRES_HOST: postgres
@@ -63,8 +68,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       OLLAMA_URL: http://ollama:11434
-    ports:
-      - "127.0.0.1:8001:8001"
     depends_on:
       postgres:
         condition: service_healthy

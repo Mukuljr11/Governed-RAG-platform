@@ -27,12 +27,10 @@ class RequestState(TypedDict):
 
 
 def lookup_policy(state: RequestState) -> dict:
-    result = call_tool("search_documents", {"query": state["request_text"], "top_k": 4})
-    passages = result.get("results", [])
-    return {
-        "passages": passages,
-        "trace": [f"lookup_policy (MCP search_documents): {len(passages)} passages"],
-    }
+        result = call_tool(
+        "search_documents",
+        {"query": state["request_text"], "user_id": state["requester_id"], "top_k": 4},
+    )
 
 
 def write_draft(state: RequestState) -> dict:
@@ -77,6 +75,7 @@ def submit_request(state: RequestState) -> dict:
             "requester_id": state["requester_id"],
             "summary": summary,
             "policy_reference": state["policy_reference"],
+            "reviewer_id": state["decision"].get("reviewer_id"),
             "reviewer_note": state["decision"].get("note", ""),
         },
     )
@@ -191,14 +190,16 @@ def get_request(thread_id: str) -> dict:
         "draft": snapshot.values.get("draft"),
         "policy_reference": snapshot.values.get("policy_reference"),
         "trace": snapshot.values.get("trace", []),
+        "requester_id": snapshot.values.get("requester_id"),
     }
 
 
-def decide(thread_id: str, approved: bool, note: str = "") -> dict:
+def decide(thread_id: str, approved: bool, note: str, reviewer_id: int) -> dict:
     config = {"configurable": {"thread_id": thread_id}}
     if not get_graph().get_state(config).next:
         raise LookupError("No pending approval for this request")
     result = get_graph().invoke(
-        Command(resume={"approved": approved, "note": note}), config
+        Command(resume={"approved": approved, "note": note, "reviewer_id": reviewer_id}),
+        config,
     )
     return _present(thread_id, result)

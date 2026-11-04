@@ -11,11 +11,13 @@ mcp = FastMCP("governed-rag-tools", host="0.0.0.0", port=8001)
 
 
 @mcp.tool()
-def search_documents(query: str, top_k: int = 4) -> dict[str, Any]:
-    """Search the company document library. Returns the best matching passages with filename and page number."""
+def search_documents(query: str, user_id: int, top_k: int = 4) -> dict[str, Any]:
+    """Search the documents the given user is allowed to read. Returns the best matching passages with filename and page number."""
     db = SessionLocal()
     try:
-        rows = hybrid_search(db, query, top_k, min_similarity=settings.min_similarity)
+        rows = hybrid_search(
+            db, query, user_id=user_id, top_k=top_k, min_similarity=settings.min_similarity
+        )
     finally:
         db.close()
     return {
@@ -35,13 +37,18 @@ def search_documents(query: str, top_k: int = 4) -> dict[str, Any]:
 
 @mcp.tool()
 def create_approval_request(
-    requester_id: int, summary: str, policy_reference: str, reviewer_note: str = ""
+    requester_id: int,
+    summary: str,
+    policy_reference: str,
+    reviewer_id: int | None = None,
+    reviewer_note: str = "",
 ) -> dict[str, Any]:
     """Record a request in the approvals table. Only call this after a human has approved it."""
     db = SessionLocal()
     try:
         req = ApprovalRequest(
             requester_id=requester_id,
+            reviewer_id=reviewer_id,
             summary=summary,
             policy_reference=policy_reference,
             reviewer_note=reviewer_note or None,
@@ -51,7 +58,3 @@ def create_approval_request(
         return {"request_id": req.id, "status": req.status}
     finally:
         db.close()
-
-
-if __name__ == "__main__":
-    mcp.run(transport="streamable-http")

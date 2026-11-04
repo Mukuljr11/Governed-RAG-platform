@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     llm_model: str = "qwen2.5:3b-instruct"
     min_similarity: float = 0.6
     mcp_url: str = "http://localhost:8001/mcp"
+    jwt_secret: str = ""
+    jwt_expire_minutes: int = 60
 
     @property
     def psycopg_url(self) -> str:

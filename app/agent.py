@@ -50,8 +50,13 @@ def _chat(system: str, user: str, schema: dict | None = None) -> str:
 
 def retrieve(state: AgentState, config: RunnableConfig) -> dict:
     db = config["configurable"]["db"]
+    user_id = config["configurable"]["user_id"]
     chunks = hybrid_search(
-        db, state["query"], TOP_K, min_similarity=settings.min_similarity
+        db,
+        state["query"],
+        user_id=user_id,
+        top_k=TOP_K,
+        min_similarity=settings.min_similarity,
     )
     return {
         "chunks": chunks,
@@ -127,7 +132,7 @@ builder.add_edge("give_up", END)
 graph = builder.compile()
 
 
-def run_agent(db: Session, question: str) -> dict:
+def run_agent(db: Session, question: str, user_id: int) -> dict:
     final = graph.invoke(
         {
             "question": question,
@@ -139,7 +144,7 @@ def run_agent(db: Session, question: str) -> dict:
             "attempts": 0,
             "trace": [],
         },
-        config={"configurable": {"db": db}},
+        config={"configurable": {"db": db, "user_id": user_id}},
     )
     return {
         "question": question,
