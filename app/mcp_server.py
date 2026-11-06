@@ -6,6 +6,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import ApprovalRequest
 from app.retrieval import hybrid_search
+from app.guardrails import redact
 
 mcp = FastMCP("governed-rag-tools", host="0.0.0.0", port=8001)
 
@@ -27,7 +28,7 @@ def search_documents(query: str, user_id: int, top_k: int = 4) -> dict[str, Any]
                 "document_id": r["document_id"],
                 "filename": r["filename"],
                 "page_number": r["page_number"],
-                "content": r["content"],
+                "content": redact(r["content"]),
                 "similarity": round(r["similarity"], 3),
             }
             for r in rows

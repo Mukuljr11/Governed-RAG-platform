@@ -2,6 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.embeddings import embed_texts
+from app.guardrails import filter_injected
 
 # Constant SQL fragment (no user input is ever formatted into it).
 ACCESS_FILTER = """
@@ -83,6 +84,7 @@ def hybrid_search(
         },
     ).mappings().all()
     results = [dict(r) for r in rows]
-    return [
+    kept = [
         r for r in results if r["similarity"] >= min_similarity or r["strict_match"]
     ]
+    return filter_injected(kept)

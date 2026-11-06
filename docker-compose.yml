@@ -1,8 +1,6 @@
 services:
   api:
-    build:
-      context: .
-      dockerfile: dockerfile.local 
+    build: .
     ports:
       - "8000:8000"
     environment:
@@ -58,9 +56,7 @@ services:
     restart: unless-stopped
 
   mcp:
-    build:
-      context: .
-      dockerfile: dockerfile.local
+    build: .
     command: ["python", "-m", "app.mcp_server"]
     environment:
       POSTGRES_HOST: postgres

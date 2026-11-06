@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.generation import NOT_FOUND, build_context, extract_citations, generate_answer, has_content
 from app.retrieval import hybrid_search
+from app.guardrails import strip_placeholders
 
 MAX_REWRITES = 1
 TOP_K = 4
@@ -136,7 +137,7 @@ def run_agent(db: Session, question: str, user_id: int) -> dict:
     final = graph.invoke(
         {
             "question": question,
-            "query": question,
+            "query": strip_placeholders(question),
             "chunks": [],
             "answer": "",
             "sources": [],
