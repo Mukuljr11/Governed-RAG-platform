@@ -12,9 +12,24 @@ EVAL_EMAIL = "evalbot@example.com"
 EVAL_PASSWORD = "evalbot-pass-123"
 REFUSAL_MARKER = "couldn't find"
 
+def wait_for_api(timeout: int = 180) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            if httpx.get(f"{BASE_URL}/health", timeout=5).status_code == 200:
+                return
+        except httpx.TransportError:
+            pass
+        time.sleep(3)
+    raise SystemExit("API did not become ready within 3 minutes")
+
 
 def make_client() -> httpx.Client:
-    client = httpx.Client(base_url=BASE_URL, timeout=900)
+    client = httpx.Client(
+        base_url=BASE_URL,
+        timeout=900,
+        limits=httpx.Limits(max_keepalive_connections=0),  # new connection per request
+    )
     client.post("/auth/register", json={"email": EVAL_EMAIL, "password": EVAL_PASSWORD})
     login = client.post("/auth/login", data={"username": EVAL_EMAIL, "password": EVAL_PASSWORD})
     login.raise_for_status()
@@ -159,6 +174,7 @@ def main() -> None:
     if args.limit:
         items = items[: args.limit]
 
+    wait_for_api()
     client = make_client()
     ensure_corpus(client)
 
