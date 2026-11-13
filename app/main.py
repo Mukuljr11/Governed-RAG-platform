@@ -242,12 +242,15 @@ def search(
 ):
     query = sanitize_input(body.query, user.id)
     results = hybrid_search(
-        db, strip_placeholders(question), query, user_id=user.id, top_k=body.top_k, min_similarity=body.min_similarity
+        db,
+        strip_placeholders(query),
+        user_id=user.id,
+        top_k=body.top_k,
+        min_similarity=body.min_similarity,
     )
     for r in results:
         r["content"] = redact(r["content"])
     return {"query": query, "results": results}
-
 
 @app.post("/ask")
 def ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):

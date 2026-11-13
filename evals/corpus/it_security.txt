@@ -1,0 +1,3 @@
+IT security policy. Passwords must be at least 14 characters and changed every 90 days. Multi-factor authentication is mandatory for all remote access.
+Company laptops must use full-disk encryption. Lost or stolen devices must be reported to the security desk within 24 hours.
+Personal USB drives are not allowed on company laptops. Software installation requires approval from the IT service desk.

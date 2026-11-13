@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: ragpass
+          POSTGRES_DB: ragdb_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag -d ragdb_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: ragdb_test
+      JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t governed-rag:ci .
