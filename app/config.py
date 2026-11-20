@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     embedding_dim: int = 1024
     upload_dir: str = "./data/uploads"
     llm_model: str = "qwen2.5:3b-instruct"
-    min_similarity: float = 0.6
+    min_similarity: float = 0.5
     mcp_url: str = "http://localhost:8001/mcp"
     jwt_secret: str = ""
     jwt_expire_minutes: int = 60

@@ -32,7 +32,9 @@ def build_context(chunks: list[dict]) -> str:
 
 def generate_answer(question: str, chunks: list[dict]) -> str:
     user_prompt = (
-        f"Context:\n{build_context(chunks)}\n\nQuestion: {question}\n\nAnswer:"
+        f"Context:\n{build_context(chunks)}\n\n"
+        f"There are {len(chunks)} passages numbered 1 to {len(chunks)}; cite only those numbers.\n\n"
+        f"Question: {question}\n\nAnswer:"
     )
     with httpx.Client(base_url=settings.ollama_url, timeout=600) as client:
         resp = client.post(
@@ -73,5 +75,5 @@ def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
     return sources
 
 def has_content(answer: str) -> bool:
-    text = re.sub(r"\[[\d,\s]+\]", "", answer).strip()
-    return len(text) >= 10    
+    text = re.sub(r"\[[\d,\s]+\]", "", answer)
+    return len(re.findall(r"\w", text)) >= 2   

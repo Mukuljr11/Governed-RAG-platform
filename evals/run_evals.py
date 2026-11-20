@@ -3,6 +3,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
+import re 
 
 import httpx
 
@@ -60,12 +61,16 @@ def ensure_corpus(client: httpx.Client) -> None:
         print(f"ingested {path.name}")
 
 
+def has_phrase(text: str, phrase: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(phrase.lower())}(?!\w)", text) is not None
+
+
 def contains_all(text: str, parts: list[str]) -> bool:
-    return all(p.lower() in text for p in parts)
+    return all(has_phrase(text, p) for p in parts)
 
 
 def contains_any(text: str, parts: list[str]) -> bool:
-    return not parts or any(p.lower() in text for p in parts)
+    return not parts or any(has_phrase(text, p) for p in parts)
 
 
 def retrieval_rank(client: httpx.Client, item: dict):
@@ -98,7 +103,8 @@ def evaluate(client: httpx.Client, item: dict, mode: str) -> dict:
         return row
 
     data = resp.json()
-    answer = data["answer"].lower()
+    answer = re.sub(r"\[[\d,\s]+\]", " ", data["answer"]).lower()
+    row["answer"] = data["answer"]
     refused = REFUSAL_MARKER in answer
     row["grounded"] = bool(data["grounded"])
 
