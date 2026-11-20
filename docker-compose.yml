@@ -12,6 +12,7 @@ services:
       UPLOAD_DIR: /data/uploads
       MCP_URL: http://mcp:8001/mcp
       JWT_SECRET: ${JWT_SECRET}
+      OTLP_ENDPOINT: http://jaeger:4318/v1/traces
     volumes:
       - uploads_data:/data/uploads
     depends_on:
@@ -21,7 +22,10 @@ services:
         condition: service_healthy
       mcp:
         condition: service_started
+      jaeger:
+        condition: service_started  
     restart: unless-stopped
+          
 
   postgres:
     image: pgvector/pgvector:pg17
@@ -70,6 +74,12 @@ services:
       ollama:
         condition: service_healthy
     restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    ports:
+      - "127.0.0.1:16686:16686"
+    restart: unless-stopped  
 
 volumes:
   postgres_data:

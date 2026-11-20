@@ -6,6 +6,8 @@ from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 
+from app.observability import annotate, tracer
+
 log = logging.getLogger("guardrails")
 
 MAX_INPUT_CHARS = 2000
@@ -26,27 +28,27 @@ INJECTION_PATTERNS = {
         r"\b(ignore|disregard|forget)\b\s+(all\s+|any\s+|the\s+|your\s+|my\s+)*"
         r"(previous|prior|above|earlier|preceding|original|system)\s+"
         r"(instructions?|prompts?|rules?|messages?|context)",
-        re.I,
+        re.IGNORECASE,
     ),
     "ignore_everything": re.compile(
         r"\b(ignore|disregard|forget)\s+(everything|all)\s+(above|before|prior|previously|you were told)",
-        re.I,
+        re.IGNORECASE,
     ),
     "reveal_prompt": re.compile(
         r"\b(reveal|show|print|repeat|display|leak)\b.{0,30}\b(system|hidden|initial|original)\b.{0,15}\b(prompt|instructions?|message)",
-        re.I | re.S,
+        re.IGNORECASE | re.DOTALL,
     ),
     "role_override": re.compile(
         r"\b(you are now|from now on you|act as|pretend (to be|you are))\b.{0,60}"
         r"\b(unrestricted|unfiltered|jailbroken|no restrictions|without (any )?(rules|restrictions|filters))",
-        re.I | re.S,
+        re.IGNORECASE | re.DOTALL,
     ),
-    "jailbreak_terms": re.compile(r"\b(jailbreak|developer mode|dan mode|do anything now)\b", re.I),
+    "jailbreak_terms": re.compile(r"\b(jailbreak|developer mode|dan mode|do anything now)\b", re.IGNORECASE),
     "fake_delimiters": re.compile(
         r"(<\s*/?\s*(system|assistant|instructions?)\s*>|\[/?INST\]|###\s*(system|instruction)s?\b)",
-        re.I,
+        re.IGNORECASE,
     ),
-    "new_instructions": re.compile(r"\b(new|updated|additional) instructions?\s*:", re.I),
+    "new_instructions": re.compile(r"\b(new|updated|additional) instructions?\s*:", re.IGNORECASE),
 }
 
 
@@ -92,13 +94,17 @@ def redact(text: str) -> str:
     """Replace personal data with placeholders such as <EMAIL_ADDRESS>."""
     if not text:
         return text
-    results = get_analyzer().analyze(
-        text=text, language="en", entities=PII_ENTITIES, score_threshold=0.4
-    )
-    if not results:
-        return text
-    log.info("pii redacted: %s", sorted({r.entity_type for r in results}))
-    return get_anonymizer().anonymize(text=text, analyzer_results=results).text
+    with tracer.start_as_current_span("guardrails.redact") as span:
+        span.set_attribute("text.chars", len(text))
+        results = get_analyzer().analyze(
+            text=text, language="en", entities=PII_ENTITIES, score_threshold=0.4
+        )
+        if not results:
+            return text
+        types = sorted({r.entity_type for r in results})
+        span.set_attribute("pii.entities", ",".join(types))
+        log.info("pii redacted: %s", types)
+        return get_anonymizer().anonymize(text=text, analyzer_results=results).text
 
 
 def scan_injection(text: str) -> list[str]:
@@ -108,12 +114,14 @@ def scan_injection(text: str) -> list[str]:
 def sanitize_input(text: str, user_id: int) -> str:
     """Front door: block attacks and too-long input, then mask personal data."""
     if len(text) > MAX_INPUT_CHARS:
+        annotate(**{"guardrail.blocked": "too_long"})
         raise GuardrailViolation(
             "too_long", f"Input is longer than {MAX_INPUT_CHARS} characters"
         )
     hits = scan_injection(text)
     if hits:
         log.warning("guardrail blocked user=%s reason=prompt_injection patterns=%s", user_id, hits)
+        annotate(**{"guardrail.blocked": "prompt_injection"})
         raise GuardrailViolation(
             "prompt_injection",
             "Request blocked: it looks like an attempt to override the assistant's instructions",
@@ -133,6 +141,7 @@ def filter_injected(chunks: list[dict]) -> list[dict]:
             )
         else:
             kept.append(chunk)
+    annotate(**{"guardrail.dropped_chunks": len(chunks) - len(kept)})
     return kept
 
 def strip_placeholders(text: str) -> str:

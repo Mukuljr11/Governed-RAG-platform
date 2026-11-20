@@ -7,9 +7,14 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.generation import NOT_FOUND, build_context, extract_citations, generate_answer, has_content
-from app.retrieval import hybrid_search
+from app.generation import (
+    NOT_FOUND,
+    extract_citations,
+    generate_answer,
+    has_content,
+)
 from app.guardrails import strip_placeholders
+from app.retrieval import hybrid_search
 
 MAX_REWRITES = 1
 TOP_K = 4

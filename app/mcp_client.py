@@ -1,9 +1,11 @@
 import asyncio
 import json
-from typing import Any
 import time
-from mcp import ClientSession
 from datetime import timedelta
+from typing import Any
+
+from mcp import ClientSession
+
 from app.config import settings
 
 try:
@@ -17,12 +19,11 @@ async def _call(name: str, arguments: dict[str, Any]):
         settings.mcp_url,
         timeout=timedelta(seconds=120),
         sse_read_timeout=timedelta(seconds=120),
-    ) as (read, write, _):
-        async with ClientSession(
-            read, write, read_timeout_seconds=timedelta(seconds=120)
-        ) as session:
-            await session.initialize()
-            return await session.call_tool(name, arguments)
+    ) as (read, write, _), ClientSession(
+        read, write, read_timeout_seconds=timedelta(seconds=120)
+    ) as session:
+        await session.initialize()
+        return await session.call_tool(name, arguments)
 
 class ToolError(RuntimeError):
     """The tool ran and reported a failure. Not retried."""

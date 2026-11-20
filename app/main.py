@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,9 +21,16 @@ from app.agent import run_agent
 from app.config import settings
 from app.db import engine, get_db
 from app.generation import NOT_FOUND, extract_citations, generate_answer, has_content
-from app.guardrails import GuardrailViolation, get_analyzer, redact, sanitize_input, strip_placeholders
+from app.guardrails import (
+    GuardrailViolation,
+    get_analyzer,
+    redact,
+    sanitize_input,
+    strip_placeholders,
+)
 from app.ingestion import run_ingestion
 from app.models import Chunk, Document, DocumentShare, IngestionJob, User
+from app.observability import annotate, request_context, setup_logging, setup_tracing
 from app.request_agent import decide, get_graph, get_request, start_request
 from app.retrieval import hybrid_search
 from app.security import (
@@ -36,7 +42,7 @@ from app.security import (
     verify_password,
 )
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 
 
 @asynccontextmanager
@@ -56,7 +62,8 @@ async def guardrail_handler(request: Request, exc: GuardrailViolation):
     return JSONResponse(
         status_code=400, content={"detail": exc.message, "guardrail": exc.code}
     )
-
+app.middleware("http")(request_context)
+setup_tracing(app)
 
 # ---------- health ----------
 @app.get("/health")
@@ -263,16 +270,21 @@ def ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depen
         min_similarity=settings.min_similarity,
     )
     if not chunks:
+        annotate(**{"rag.chunks": 0, "rag.refused": True, "rag.grounded": True})
         return {"question": question, "answer": NOT_FOUND, "sources": [], "grounded": True}
 
     answer = generate_answer(question, chunks)
     sources = extract_citations(answer, chunks)
-    return {
-        "question": question,
-        "answer": answer,
-        "sources": sources,
-        "grounded": (bool(sources) and has_content(answer)) or answer.strip() == NOT_FOUND,
-    }
+    grounded = (bool(sources) and has_content(answer)) or answer.strip() == NOT_FOUND
+    annotate(
+        **{
+            "rag.chunks": len(chunks),
+            "rag.sources": len(sources),
+            "rag.grounded": grounded,
+            "rag.refused": NOT_FOUND in answer,
+        }
+    )
+    return {"question": question, "answer": answer, "sources": sources, "grounded": grounded}
 
 
 @app.post("/ask/agent")
@@ -280,7 +292,17 @@ def ask_agent(
     body: AskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     question = sanitize_input(body.question, user.id)
-    return run_agent(db, question, user.id)
+    result = run_agent(db, question, user.id)
+    annotate(
+        **{
+            "rag.sources": len(result["sources"]),
+            "rag.grounded": result["grounded"],
+            "rag.refused": NOT_FOUND in result["answer"],
+            "agent.steps": len(result["trace"]),
+            "agent.trace": " | ".join(result["trace"]),
+        }
+    )
+    return result
 
 
 # ---------- approval requests ----------

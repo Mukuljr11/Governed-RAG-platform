@@ -4,6 +4,7 @@ import httpx
 
 from app.config import settings
 from app.guardrails import redact
+from app.observability import tracer
 
 NOT_FOUND = "I couldn't find this in the provided documents."
 
@@ -32,25 +33,37 @@ def build_context(chunks: list[dict]) -> str:
 
 def generate_answer(question: str, chunks: list[dict]) -> str:
     user_prompt = (
-        f"Context:\n{build_context(chunks)}\n\n"
-        f"There are {len(chunks)} passages numbered 1 to {len(chunks)}; cite only those numbers.\n\n"
-        f"Question: {question}\n\nAnswer:"
+        f"Context:\n{build_context(chunks)}\n\nQuestion: {question}\n\nAnswer:"
     )
-    with httpx.Client(base_url=settings.ollama_url, timeout=600) as client:
-        resp = client.post(
-            "/api/chat",
-            json={
-                "model": settings.llm_model,
-                "stream": False,
-                "options": {"temperature": 0, "num_ctx": 4096},
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-            },
-        )
-        resp.raise_for_status()
-        return redact(resp.json()["message"]["content"].strip())
+    with tracer.start_as_current_span("generation.llm") as span:
+        span.set_attribute("llm.model", settings.llm_model)
+        span.set_attribute("llm.passages", len(chunks))
+        with httpx.Client(base_url=settings.ollama_url, timeout=600) as client:
+            resp = client.post(
+                "/api/chat",
+                json={
+                    "model": settings.llm_model,
+                    "stream": False,
+                    "options": {"temperature": 0, "num_ctx": 4096},
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                },
+            )
+            resp.raise_for_status()
+        data = resp.json()
+        span.set_attribute("llm.prompt_tokens", data.get("prompt_eval_count", 0))
+        span.set_attribute("llm.completion_tokens", data.get("eval_count", 0))
+        span.set_attribute("llm.load_ms", round(data.get("load_duration", 0) / 1e6))
+        span.set_attribute("llm.total_ms", round(data.get("total_duration", 0) / 1e6))
+        eval_ns = data.get("eval_duration", 0)
+        if eval_ns:
+            span.set_attribute(
+                "llm.tokens_per_second",
+                round(data.get("eval_count", 0) / (eval_ns / 1e9), 1),
+            )
+        return redact(data["message"]["content"].strip())
 
 
 def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:

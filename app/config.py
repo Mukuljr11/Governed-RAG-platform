@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     mcp_url: str = "http://localhost:8001/mcp"
     jwt_secret: str = ""
     jwt_expire_minutes: int = 60
+    otlp_endpoint: str = ""
+    service_name: str = "governed-rag-api"
 
     @property
     def psycopg_url(self) -> str:

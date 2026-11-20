@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.embeddings import embed_texts
 from app.guardrails import filter_injected
+from app.observability import tracer
 
 # Constant SQL fragment (no user input is ever formatted into it).
 ACCESS_FILTER = """
@@ -71,20 +72,26 @@ def hybrid_search(
     candidates: int = 20,
     min_similarity: float = 0.0,
 ) -> list[dict]:
-    qvec = embed_texts([query])[0]
-    vec_literal = "[" + ",".join(str(x) for x in qvec) + "]"
-    rows = db.execute(
-        HYBRID_SQL,
-        {
-            "qvec": vec_literal,
-            "qtext": query,
-            "k": candidates,
-            "top_k": top_k,
-            "uid": user_id,
-        },
-    ).mappings().all()
-    results = [dict(r) for r in rows]
-    kept = [
-        r for r in results if r["similarity"] >= min_similarity or r["strict_match"]
-    ]
-    return filter_injected(kept)
+    with tracer.start_as_current_span("retrieval.hybrid_search") as span:
+        span.set_attribute("search.user_id", user_id)
+        qvec = embed_texts([query])[0]
+        vec_literal = "[" + ",".join(str(x) for x in qvec) + "]"
+        rows = db.execute(
+            HYBRID_SQL,
+            {
+                "qvec": vec_literal,
+                "qtext": query,
+                "k": candidates,
+                "top_k": top_k,
+                "uid": user_id,
+            },
+        ).mappings().all()
+        results = [dict(r) for r in rows]
+        kept = [
+            r for r in results if r["similarity"] >= min_similarity or r["strict_match"]
+        ]
+        final = filter_injected(kept)
+        span.set_attribute("search.returned", len(results))
+        span.set_attribute("search.kept_after_threshold", len(kept))
+        span.set_attribute("search.final", len(final))
+        return final

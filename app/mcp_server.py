@@ -4,9 +4,12 @@ from mcp.server.fastmcp import FastMCP
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import ApprovalRequest
-from app.retrieval import hybrid_search
 from app.guardrails import redact
+from app.models import ApprovalRequest
+from app.observability import setup_logging
+from app.retrieval import hybrid_search
+
+setup_logging(access_log=True)
 
 mcp = FastMCP("governed-rag-tools", host="0.0.0.0", port=8001)
 

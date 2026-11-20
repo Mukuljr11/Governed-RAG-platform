@@ -1,9 +1,9 @@
 import argparse
 import json
+import re
 import time
 from datetime import datetime
 from pathlib import Path
-import re 
 
 import httpx
 
@@ -86,17 +86,19 @@ def retrieval_rank(client: httpx.Client, item: dict):
 
 def evaluate(client: httpx.Client, item: dict, mode: str) -> dict:
     row = {"id": item["id"], "type": item["type"]}
+    request_id = f"eval-{item['id']}-{mode}"
+    row["request_id"] = request_id
     kind = item["type"]
     start = time.time()
 
     if kind == "injection":
-        resp = client.post("/ask", json={"question": item["question"]})
+        resp = client.post("/ask", json={"question": item["question"]}, headers={"X-Request-ID": request_id})
         row["latency"] = time.time() - start
         row["passed"] = resp.status_code == 400
         return row
 
     endpoint = "/ask/agent" if mode == "agent" else "/ask"
-    resp = client.post(endpoint, json={"question": item["question"]})
+    resp = client.post(endpoint, json={"question": item["question"]}, headers={"X-Request-ID": request_id})
     row["latency"] = time.time() - start
     if resp.status_code != 200:
         row.update(passed=False, error=resp.status_code)
