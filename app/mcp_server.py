@@ -62,3 +62,7 @@ def create_approval_request(
         return {"request_id": req.id, "status": req.status}
     finally:
         db.close()
+
+
+if __name__ == "__main__":
+    mcp.run(transport="streamable-http")

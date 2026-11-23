@@ -27,10 +27,15 @@ class RequestState(TypedDict):
 
 
 def lookup_policy(state: RequestState) -> dict:
-        result = call_tool(
+    result = call_tool(
         "search_documents",
         {"query": state["request_text"], "user_id": state["requester_id"], "top_k": 4},
     )
+    passages = result.get("results", [])
+    return {
+        "passages": passages,
+        "trace": [f"lookup_policy (MCP search_documents): {len(passages)} passages"],
+    }
 
 
 def write_draft(state: RequestState) -> dict:

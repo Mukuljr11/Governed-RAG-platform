@@ -50,7 +50,7 @@ def run_ingestion(job_id: int) -> None:
         )
         job.status = "done"
         db.commit()
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001 - any failure must mark the job as failed
         db.rollback()
         job = db.get(IngestionJob, job_id)
         job.status = "failed"
