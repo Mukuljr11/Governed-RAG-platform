@@ -41,3 +41,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t governed-rag:ci .
+
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ci-password
+      POSTGRES_DB: ragdb
+      JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet    

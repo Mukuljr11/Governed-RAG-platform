@@ -1,40 +1,16 @@
-services:
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      OLLAMA_URL: http://ollama:11434
-      UPLOAD_DIR: /data/uploads
-      MCP_URL: http://mcp:8001/mcp
-      JWT_SECRET: ${JWT_SECRET}
-      OTLP_ENDPOINT: http://jaeger:4318/v1/traces
-    volumes:
-      - uploads_data:/data/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-      mcp:
-        condition: service_started
-      jaeger:
-        condition: service_started  
-    restart: unless-stopped
-          
+x-db-env: &db-env
+  POSTGRES_HOST: postgres
+  POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is not set}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
+  POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is not set}
 
+services:
   postgres:
     image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "127.0.0.1:5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is not set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is not set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,9 +22,7 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "127.0.0.1:11435:11434"
+    image: ollama/ollama:0.40.9
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -59,27 +33,70 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    restart: unless-stopped
+
+  migrate:
+    image: governed-rag:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *db-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   mcp:
-    build: .
+    image: governed-rag:local
     command: ["python", "-m", "app.mcp_server"]
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      <<: *db-env
       OLLAMA_URL: http://ollama:11434
     depends_on:
       postgres:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8001), 3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     restart: unless-stopped
 
-  jaeger:
-    image: jaegertracing/jaeger:2.20.0
-    ports:
-      - "127.0.0.1:16686:16686"
-    restart: unless-stopped  
+  api:
+    build: .
+    image: governed-rag:local
+    environment:
+      <<: *db-env
+      OLLAMA_URL: http://ollama:11434
+      UPLOAD_DIR: /data/uploads
+      MCP_URL: http://mcp:8001/mcp
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is not set}
+      OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+    volumes:
+      - uploads_data:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
 
 volumes:
   postgres_data:
